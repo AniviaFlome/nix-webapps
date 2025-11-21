@@ -20,11 +20,11 @@ let
       icon = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Icon URL or local file path. If URL, must also provide iconSha256.";
+        description = "Icon URL or local file path. If URL, must also provide sha.";
         example = "https://github.com/favicon.ico";
       };
 
-      iconSha256 = mkOption {
+      sha = mkOption {
         type = types.nullOr types.str;
         default = null;
         description = "SHA256 hash of the icon file (required for URL icons). Get with: nix-prefetch-url <url>";
@@ -81,8 +81,8 @@ let
       isIconUrl = isUrl iconUrl;
       # Use provided SHA or fake SHA for auto-fetched favicons
       iconSha =
-        if app.iconSha256 != null then
-          app.iconSha256
+        if app.sha != null then
+          app.sha
         else if app.icon == null then
         # Auto-fetch favicon: use fake SHA which will fail with real hash
           lib.fakeSha256
