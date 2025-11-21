@@ -75,23 +75,35 @@ let
   # Helper function to get icon path for desktop file
   getIconPath = name: app:
     let
-      iconUrl = if app.icon == null then null else app.icon;
+      # Determine the icon URL to use
+      iconUrl = if app.icon == null then "${getBaseUrl app.url}/favicon.ico" else app.icon;
+      # Determine if it's a URL
+      isIconUrl = isUrl iconUrl;
+      # Use provided SHA or fake SHA for auto-fetched favicons
+      iconSha =
+        if app.iconSha256 != null then
+          app.iconSha256
+        else if app.icon == null then
+        # Auto-fetch favicon: use fake SHA which will fail with real hash
+          lib.fakeSha256
+        else
+          null;
     in
-    if iconUrl == null then
-      null  # No icon
-    else if isUrl iconUrl && app.iconSha256 != null then
+    if isIconUrl && iconSha != null then
     # Download icon at build time with fetchurl
       pkgs.fetchurl
         {
           url = iconUrl;
-          sha256 = app.iconSha256;
+          sha256 = iconSha;
           name = "${name}-icon";
         }
-    else if isUrl iconUrl then
+    else if isIconUrl then
       null  # URL without SHA256 - skip icon
-    else
+    else if iconUrl != null then
     # Local file path
-      iconUrl;
+      iconUrl
+    else
+      null;
 
   # Generate .desktop file content
   makeDesktopFile = name: app:
