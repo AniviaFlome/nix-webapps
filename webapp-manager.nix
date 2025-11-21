@@ -75,10 +75,11 @@ let
   # Helper function to get icon path for desktop file
   getIconPath = name: app:
     let
-      iconUrl = if app.icon == null then "${getBaseUrl app.url}/favicon.ico" else app.icon;
-      isIconUrl = isUrl iconUrl;
+      iconUrl = if app.icon == null then null else app.icon;
     in
-    if isIconUrl && app.iconSha256 != null then
+    if iconUrl == null then
+      null  # No icon
+    else if isUrl iconUrl && app.iconSha256 != null then
     # Download icon at build time with fetchurl
       pkgs.fetchurl
         {
@@ -86,9 +87,8 @@ let
           sha256 = app.iconSha256;
           name = "${name}-icon";
         }
-    else if isIconUrl then
-    # URL without SHA - use a placeholder icon
-      pkgs.writeText "${name}-icon-placeholder.txt" "Icon URL: ${iconUrl}\nRun: nix-prefetch-url ${iconUrl}"
+    else if isUrl iconUrl then
+      null  # URL without SHA256 - skip icon
     else
     # Local file path
       iconUrl;
@@ -117,6 +117,11 @@ let
           "MimeType=${concatStringsSep ";" app.mimeTypes};\n"
         else
           "";
+      iconStr =
+        if iconPath != null then
+          "Icon=${iconPath}\n"
+        else
+          "";
     in
     pkgs.writeText "${name}.desktop" ''
       [Desktop Entry]
@@ -126,8 +131,7 @@ let
       Exec=${execCommand}
       Terminal=false
       Type=Application
-      Icon=${iconPath}
-      StartupNotify=true
+      ${iconStr}StartupNotify=true
       ${mimeTypeStr}'';
 
 in
