@@ -34,7 +34,10 @@ A declarative Home Manager module for managing web application launchers on Linu
 ### Basic Configuration
 
 ```nix
-programs.nix-webapps = {
+{
+ imports = [ inputs.nix-webapps.homeManagerModules.default ];
+
+ programs.nix-webapps = {
   enable = true;
   browser = "brave";  # Set your preferred browser
 
@@ -54,7 +57,8 @@ programs.nix-webapps = {
       comment = "GitHub";
     };
   };
-};
+ };
+}
 ```
 
 ### Advanced Configuration

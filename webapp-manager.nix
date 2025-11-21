@@ -81,7 +81,7 @@ let
   # Generate .desktop file content
   makeDesktopFile = name: app:
     let
-      iconPath = "$HOME/.local/share/applications/icons/${name}.png";
+      iconPath = "$HOME/.local/share/applications/nix-webapps/icons/${name}.png";
       # Use per-app browser if specified, otherwise use defaultBrowser
       browser = if app.browser != null then app.browser else cfg.browser;
       # Use webapp-launcher generator if no custom exec is provided
@@ -159,7 +159,7 @@ in
 
     # Ensure the icons directory exists and download/copy icons
     home.activation.webappIcons = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      $DRY_RUN_CMD mkdir -p $HOME/.local/share/applications/icons
+      $DRY_RUN_CMD mkdir -p $HOME/.local/share/applications/nix-webapps/icons
 
       ${concatStringsSep "\n" (mapAttrsToList (name: app:
         let
@@ -167,16 +167,20 @@ in
           isIconUrl = isUrl iconRef;
         in
         if isIconUrl then
-          # Download icon from URL
+          # Download icon from URL during activation (no SHA needed)
           ''
-            if [[ -z "$DRY_RUN" ]]; then
-              ${pkgs.curl}/bin/curl -sL "${iconRef}" -o "$HOME/.local/share/applications/icons/${name}.png" || echo "Warning: Failed to download icon for ${name}"
+            if [ -z "$DRY_RUN_CMD" ]; then
+              ${pkgs.curl}/bin/curl -sL "${iconRef}" -o "$HOME/.local/share/applications/nix-webapps/icons/${name}.png" 2>/dev/null || \
+                echo "Warning: Failed to download icon for ${name} from ${iconRef}"
+            else
+              echo "Would download icon for ${name} from ${iconRef}"
             fi
           ''
         else
           # Copy local icon file
           ''
-            $DRY_RUN_CMD cp -f ${iconRef} $HOME/.local/share/applications/icons/${name}.png
+            $DRY_RUN_CMD cp -f ${iconRef} $HOME/.local/share/applications/nix-webapps/icons/${name}.png 2>/dev/null || \
+              echo "Warning: Failed to copy icon for ${name}"
           ''
       ) cfg.apps)}
     '';
