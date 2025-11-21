@@ -20,8 +20,15 @@ let
       icon = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Icon URL or local file path. URLs will be downloaded at activation time (not build time). If null, automatically fetches favicon from website.";
-        example = "./icons/myapp.png";
+        description = "Icon URL or local file path. If URL, must also provide iconSha256.";
+        example = "https://github.com/favicon.ico";
+      };
+
+      iconSha256 = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "SHA256 hash of the icon file (required for URL icons). Get with: nix-prefetch-url <url>";
+        example = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
       };
 
       browser = mkOption {
@@ -65,23 +72,31 @@ let
     in
     if matches != null then builtins.head matches else url;
 
-  # Helper function to get icon path/URL for an app
-  # Returns either a local path or URL (download happens in activation script)
+  # Helper function to get icon path for desktop file
   getIconPath = name: app:
-    if app.icon == null then
-    # Auto-generate favicon URL from base URL
-      "${getBaseUrl app.url}/favicon.ico"
-    else if isUrl app.icon then
-    # Return URL as-is, download happens in activation
-      app.icon
+    let
+      iconUrl = if app.icon == null then "${getBaseUrl app.url}/favicon.ico" else app.icon;
+      isIconUrl = isUrl iconUrl;
+    in
+    if isIconUrl && app.iconSha256 != null then
+    # Download icon at build time with fetchurl
+      pkgs.fetchurl
+        {
+          url = iconUrl;
+          sha256 = app.iconSha256;
+          name = "${name}-icon";
+        }
+    else if isIconUrl then
+    # URL without SHA - use a placeholder icon
+      pkgs.writeText "${name}-icon-placeholder.txt" "Icon URL: ${iconUrl}\nRun: nix-prefetch-url ${iconUrl}"
     else
     # Local file path
-      app.icon;
+      iconUrl;
 
   # Generate .desktop file content
   makeDesktopFile = name: app:
     let
-      iconPath = "$HOME/.local/share/applications/icons/nix-webapps/${name}.png";
+      iconPath = getIconPath name app;
       # Use per-app browser if specified, otherwise use defaultBrowser
       browser = if app.browser != null then app.browser else cfg.browser;
       # Use webapp-launcher generator if no custom exec is provided
@@ -156,34 +171,5 @@ in
         }
       )
       cfg.apps;
-
-    # Ensure the icons directory exists and download/copy icons
-    home.activation.webappIcons = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      $DRY_RUN_CMD mkdir -p $HOME/.local/share/applications/icons/nix-webapps
-
-      ${concatStringsSep "\n" (mapAttrsToList (name: app:
-        let
-          iconRef = getIconPath name app;
-          isIconUrl = isUrl iconRef;
-        in
-        if isIconUrl then
-          # Download icon from URL during activation (no SHA needed)
-          ''
-            if [ -z "$DRY_RUN_CMD" ]; then
-              echo "Downloading icon for ${name} from ${iconRef}..."
-              ${pkgs.curl}/bin/curl -fsSL "${iconRef}" -o "$HOME/.local/share/applications/icons/nix-webapps/${name}.png" || \
-                echo "Warning: Failed to download icon for ${name} from ${iconRef}"
-            else
-              echo "Would download icon for ${name} from ${iconRef}"
-            fi
-          ''
-        else
-          # Copy local icon file
-          ''
-            $DRY_RUN_CMD cp -f ${iconRef} $HOME/.local/share/applications/icons/nix-webapps/${name}.png 2>/dev/null || \
-              echo "Warning: Failed to copy icon for ${name}"
-          ''
-      ) cfg.apps)}
-    '';
   };
 }
