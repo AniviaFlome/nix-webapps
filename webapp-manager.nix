@@ -20,8 +20,8 @@ let
       icon = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Icon URL or local file path. URLs will be automatically downloaded. If null, automatically fetches from website's favicon.";
-        example = "https://example.com/icon.png";
+        description = "Icon URL or local file path. URLs will be downloaded at activation time (not build time). If null, automatically fetches favicon from website.";
+        example = "./icons/myapp.png";
       };
 
       browser = mkOption {
@@ -65,32 +65,23 @@ let
     in
     if matches != null then builtins.head matches else url;
 
-  # Helper function to download icon or use local path
+  # Helper function to get icon path/URL for an app
+  # Returns either a local path or URL (download happens in activation script)
   getIconPath = name: app:
-    let
-      iconRef =
-        if app.icon == null then
-        # Fetch favicon from website's base URL
-          "${getBaseUrl app.url}/favicon.ico"
-        else
-          app.icon;
-    in
-    if isUrl iconRef then
-    # Download the icon
-      pkgs.fetchurl
-        {
-          url = iconRef;
-          name = "${name}-icon";
-          # Note: Using impure fetch for automatic favicon
-        }
+    if app.icon == null then
+    # Auto-generate favicon URL from base URL
+      "${getBaseUrl app.url}/favicon.ico"
+    else if isUrl app.icon then
+    # Return URL as-is, download happens in activation
+      app.icon
     else
-    # Use local file path as-is
-      iconRef;
+    # Local file path
+      app.icon;
 
   # Generate .desktop file content
   makeDesktopFile = name: app:
     let
-      iconPath = getIconPath name app;
+      iconPath = "$HOME/.local/share/applications/icons/${name}.png";
       # Use per-app browser if specified, otherwise use defaultBrowser
       browser = if app.browser != null then app.browser else cfg.defaultBrowser;
       # Use webapp-launcher generator if no custom exec is provided
@@ -137,12 +128,12 @@ in
         {
           gmail = {
             url = "https://mail.google.com";
-            icon = "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico";
             comment = "Gmail Web App";
+            # icon will be auto-fetched from https://mail.google.com/favicon.ico
           };
           github = {
             url = "https://github.com";
-            icon = "https://github.githubassets.com/favicons/favicon.png";
+            # icon auto-fetched
           };
         }
       '';
@@ -166,15 +157,27 @@ in
       )
       cfg.apps;
 
-    # Ensure the icons directory exists and copy icons
+    # Ensure the icons directory exists and download/copy icons
     home.activation.webappIcons = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       $DRY_RUN_CMD mkdir -p $HOME/.local/share/applications/icons
-      
+
       ${concatStringsSep "\n" (mapAttrsToList (name: app:
-        let iconPath = getIconPath name app;
-        in ''
-          $DRY_RUN_CMD cp -f ${iconPath} $HOME/.local/share/applications/icons/${name}.png
-        ''
+        let
+          iconRef = getIconPath name app;
+          isIconUrl = isUrl iconRef;
+        in
+        if isIconUrl then
+          # Download icon from URL
+          ''
+            if [[ -z "$DRY_RUN" ]]; then
+              ${pkgs.curl}/bin/curl -sL "${iconRef}" -o "$HOME/.local/share/applications/icons/${name}.png" || echo "Warning: Failed to download icon for ${name}"
+            fi
+          ''
+        else
+          # Copy local icon file
+          ''
+            $DRY_RUN_CMD cp -f ${iconRef} $HOME/.local/share/applications/icons/${name}.png
+          ''
       ) cfg.apps)}
     '';
   };

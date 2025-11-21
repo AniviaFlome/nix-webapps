@@ -24,47 +24,9 @@ A declarative Home Manager module for managing web application launchers on Linu
 1. Add this flake to your Home Manager configuration:
 
 ```nix
-{
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    home-manager.url = "github:nix-community/home-manager";
-    home-manager.inputs.nixpkgs.follows = "nixpkgs";
-
-    nix-webapps.url = "github:yourusername/nix-webapps";  # Update with your repo
+    nix-webapps.url = "github:AniviaFlome/nix-webapps";
   };
-
-  outputs = { self, nixpkgs, home-manager, nix-webapps, ... }: {
-    homeConfigurations.youruser = home-manager.lib.homeManagerConfiguration {
-      pkgs = nixpkgs.legacyPackages.x86_64-linux;
-      modules = [
-        nix-webapps.homeManagerModules.default
-        {
-          programs.webappManager = {
-            enable = true;
-            apps = {
-              # Your app configurations
-            };
-          };
-        }
-      ];
-    };
-  };
-}
-```
-
-### Manual Installation
-
-1. Copy `webapp-manager.nix` and `webapp-launcher.sh` to your Home Manager configuration directory
-2. Import the module in your `home.nix`:
-
-```nix
-{ config, pkgs, ... }:
-
-{
-  imports = [
-    ./webapp-manager.nix
-  ];
-}
 ```
 
 ## Usage
