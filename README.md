@@ -1,0 +1,259 @@
+# Nix Web App Manager
+
+A declarative Home Manager module for managing web application launchers on Linux.
+
+## Features
+
+- **Declarative Configuration**: Define all your web apps in your Nix configuration
+- **Automatic Icon Management**: Icons are optional - automatically fetches favicons when not specified
+- **Desktop Integration**: Generates `.desktop` files for app launcher integration
+- **Standalone Launcher**: Built-in webapp launcher (no external dependencies)
+- **Multi-Browser Support**: Automatically detects and uses available browsers
+  - Supported: Zen Browser, Brave, Firefox, Chromium, Vivaldi, Microsoft Edge
+  - Auto-fallback to first available browser
+  - Optional browser preference per app
+- **Custom Commands**: Support for custom exec commands
+- **Protocol Handlers**: MIME type support for handling custom protocols
+- **Type Safe**: Uses Nix's type system for validation
+- **Formatting**: Integrated treefmt support for code quality
+
+## Installation
+
+### Using Flakes (Recommended)
+
+1. Add this flake to your Home Manager configuration:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+    nix-webapps.url = "github:yourusername/nix-webapps";  # Update with your repo
+  };
+
+  outputs = { self, nixpkgs, home-manager, nix-webapps, ... }: {
+    homeConfigurations.youruser = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        nix-webapps.homeManagerModules.default
+        {
+          programs.webappManager = {
+            enable = true;
+            apps = {
+              # Your app configurations
+            };
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+### Manual Installation
+
+1. Copy `webapp-manager.nix` and `webapp-launcher.sh` to your Home Manager configuration directory
+2. Import the module in your `home.nix`:
+
+```nix
+{ config, pkgs, ... }:
+
+{
+  imports = [
+    ./webapp-manager.nix
+  ];
+}
+```
+
+## Usage
+
+### Basic Configuration
+
+```nix
+programs.webappManager = {
+  enable = true;
+  defaultBrowser = "brave";  # Set your preferred browser
+
+  apps = {
+    # Icon will be automatically fetched from Gmail's favicon
+    # Uses defaultBrowser (brave)
+    gmail = {
+      url = "https://mail.google.com";
+      comment = "Gmail Web App";
+    };
+
+    # Or specify a custom icon URL and override browser for this app
+    github = {
+      url = "https://github.com";
+      icon = "https://github.githubassets.com/favicons/favicon.png";
+      browser = "firefox";  # Override defaultBrowser just for this app
+      comment = "GitHub";
+    };
+  };
+};
+```
+
+### Advanced Configuration
+
+```nix
+programs.webappManager = {
+  enable = true;
+  defaultBrowser = "brave";  # Global default
+
+  apps = {
+    # Without icon - automatically fetches favicon
+    # Uses defaultBrowser (brave)
+    notion = {
+      url = "https://notion.so";
+      comment = "Notion Workspace";
+    };
+
+    # Override browser for specific app
+    slack = {
+      url = "https://slack.com";
+      browser = "firefox";  # Will open in Firefox instead of Brave
+      comment = "Slack";
+    };
+
+    # With MIME types for protocol handling
+    discord = {
+      url = "https://discord.com/app";
+      mimeTypes = [ "x-scheme-handler/discord" ];
+      comment = "Discord";
+    };
+
+    # With local icon file
+    custom-app = {
+      url = "https://example.com";
+      icon = ./icons/custom.png;
+      comment = "Custom App";
+    };
+  };
+};
+```
+
+### Apply Changes
+
+```bash
+home-manager switch
+```
+
+Your web apps will appear in your application launcher (SUPER + SPACE).
+
+## Configuration Options
+
+### Module Options
+
+- **`enable`**: Enable the webapp manager module
+- **`defaultBrowser`**: Default browser to use for all web apps (default: `"firefox"`)
+  - Supported: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
+- **`apps`**: Attribute set of web applications
+
+### Per-App Options
+
+- **`url`** (required): The URL of the web application
+- **`icon`** (optional): Icon URL (will be downloaded) or local file path. If not specified, automatically fetches from `<url>/favicon.ico`
+- **`browser`** (optional): Browser to use for this specific app. Overrides `defaultBrowser`. Must be one of: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
+- **`exec`** (optional): Custom exec command. If specified, overrides both `browser` and `defaultBrowser`
+- **`comment`** (optional): Description shown in app launcher
+- **`mimeTypes`** (optional): List of MIME types for protocol handling
+
+## Supported Browsers
+
+Configure your preferred browser using the `defaultBrowser` option:
+
+```nix
+programs.webappManager.defaultBrowser = "brave";
+```
+
+Supported browsers:
+
+- `"firefox"` - Mozilla Firefox
+- `"brave"` - Brave Browser
+- `"chromium"` - Chromium
+- `"zen"` - Zen Browser
+- `"vivaldi"` - Vivaldi
+- `"edge"` - Microsoft Edge
+
+### Per-App Browser Override
+
+You can override the browser for specific apps:
+
+```nix
+apps.slack = {
+  url = "https://slack.com";
+  browser = "firefox";  # Use Firefox instead of defaultBrowser
+};
+```
+
+## Examples
+
+See [example-config.nix](./example-config.nix) for comprehensive examples.
+
+## Development
+
+### Formatting
+
+This project uses treefmt-nix for code formatting:
+
+```bash
+nix fmt
+```
+
+### Browser Engine Categorization
+
+The webapp launcher categorizes browsers by their rendering engine:
+
+**Chromium-based browsers** (`--app` mode):
+
+- Brave
+- Chromium
+- Vivaldi
+- Microsoft Edge
+
+**Firefox-based browsers** (standard window mode):
+
+- Firefox
+- Zen Browser
+
+Each category uses engine-appropriate flags for optimal webapp integration.
+
+## Compared to Bash Scripts
+
+### Bash Script Approach
+
+- Manual icon downloading with `curl`
+- Imperative add/remove scripts
+- State managed in filesystem
+- Requires interactive commands to manage apps
+- External dependencies for launching
+
+### Nix Module Approach
+
+- Automatic icon handling (or automatic favicon fetch)
+- Declarative configuration
+- State managed in Nix configuration
+- Add/remove apps by editing config and rebuilding
+- Reproducible across systems
+- Type-safe configuration
+- Built-in standalone launcher
+- No external dependencies
+
+## Requirements
+
+This module requires:
+
+- Nix with flakes enabled (recommended) or Home Manager
+- At least one supported browser installed: Firefox, Brave, Chromium, Zen, Vivaldi, or Edge
+- XDG directories configured
+
+## File Locations
+
+- Desktop files: `~/.local/share/applications/<app-name>.desktop`
+- Icons: `~/.local/share/applications/icons/<app-name>.png`
+
+## License
+
+MIT

@@ -1,0 +1,181 @@
+{ config, lib, pkgs, ... }:
+
+with lib;
+
+let
+  cfg = config.programs.webappManager;
+
+  # Browser type definition
+  browserType = types.enum [ "firefox" "brave" "chromium" "zen" "vivaldi" "edge" ];
+
+  # Type definition for a web app
+  webappType = types.submodule {
+    options = {
+      url = mkOption {
+        type = types.str;
+        description = "URL of the web application";
+        example = "https://mail.google.com";
+      };
+
+      icon = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Icon URL or local file path. URLs will be automatically downloaded. If null, automatically fetches from website's favicon.";
+        example = "https://example.com/icon.png";
+      };
+
+      browser = mkOption {
+        type = types.nullOr browserType;
+        default = null;
+        description = "Browser to use for this app. If null, uses defaultBrowser.";
+        example = "brave";
+      };
+
+      exec = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Custom exec command. If null, uses the webapp-launcher with configured browser.";
+        example = "custom-browser-launcher %U";
+      };
+
+      comment = mkOption {
+        type = types.str;
+        default = "";
+        description = "Comment/description for the application";
+        example = "My favorite web app";
+      };
+
+      mimeTypes = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "List of MIME types this application handles";
+        example = [ "x-scheme-handler/slack" ];
+      };
+    };
+  };
+
+  # Helper function to determine if icon is a URL
+  isUrl = str: hasPrefix "http://" str || hasPrefix "https://" str;
+
+  # Helper function to extract base URL from a full URL
+  getBaseUrl = url:
+    let
+      # Extract protocol and domain from URL
+      matches = builtins.match "(https?://[^/]+).*" url;
+    in
+    if matches != null then builtins.head matches else url;
+
+  # Helper function to download icon or use local path
+  getIconPath = name: app:
+    let
+      iconRef =
+        if app.icon == null then
+        # Fetch favicon from website's base URL
+          "${getBaseUrl app.url}/favicon.ico"
+        else
+          app.icon;
+    in
+    if isUrl iconRef then
+    # Download the icon
+      pkgs.fetchurl
+        {
+          url = iconRef;
+          name = "${name}-icon";
+          # Note: Using impure fetch for automatic favicon
+        }
+    else
+    # Use local file path as-is
+      iconRef;
+
+  # Generate .desktop file content
+  makeDesktopFile = name: app:
+    let
+      iconPath = getIconPath name app;
+      # Use per-app browser if specified, otherwise use defaultBrowser
+      browser = if app.browser != null then app.browser else cfg.defaultBrowser;
+      # Use webapp-launcher generator if no custom exec is provided
+      execCommand =
+        if app.exec != null then
+          app.exec
+        else
+          let
+            launcher = pkgs.callPackage ./webapp-launcher.nix {
+              inherit browser;
+              url = app.url;
+              appName = name;
+            };
+          in
+          "${launcher}/bin/webapp-launcher-${name}";
+      mimeTypeStr =
+        if app.mimeTypes != [ ] then
+          "MimeType=${concatStringsSep ";" app.mimeTypes};\n"
+        else
+          "";
+    in
+    pkgs.writeText "${name}.desktop" ''
+      [Desktop Entry]
+      Version=1.0
+      Name=${name}
+      Comment=${if app.comment != "" then app.comment else name}
+      Exec=${execCommand}
+      Terminal=false
+      Type=Application
+      Icon=${iconPath}
+      StartupNotify=true
+      ${mimeTypeStr}'';
+
+in
+{
+  options.programs.webappManager = {
+    enable = mkEnableOption "Web Application Manager";
+
+    apps = mkOption {
+      type = types.attrsOf webappType;
+      default = { };
+      description = "Web applications to manage";
+      example = literalExpression ''
+        {
+          gmail = {
+            url = "https://mail.google.com";
+            icon = "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico";
+            comment = "Gmail Web App";
+          };
+          github = {
+            url = "https://github.com";
+            icon = "https://github.githubassets.com/favicons/favicon.png";
+          };
+        }
+      '';
+    };
+
+    defaultBrowser = mkOption {
+      type = browserType;
+      default = "firefox";
+      description = "Default browser to use for web applications";
+      example = "brave";
+    };
+  };
+
+  config = mkIf cfg.enable {
+    # Generate .desktop files for each web app
+    xdg.dataFile = mapAttrs'
+      (name: app:
+        nameValuePair "applications/${name}.desktop" {
+          source = makeDesktopFile name app;
+        }
+      )
+      cfg.apps;
+
+    # Ensure the icons directory exists and copy icons
+    home.activation.webappIcons = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      $DRY_RUN_CMD mkdir -p $HOME/.local/share/applications/icons
+      
+      ${concatStringsSep "\n" (mapAttrsToList (name: app:
+        let iconPath = getIconPath name app;
+        in ''
+          $DRY_RUN_CMD cp -f ${iconPath} $HOME/.local/share/applications/icons/${name}.png
+        ''
+      ) cfg.apps)}
+    '';
+  };
+}
