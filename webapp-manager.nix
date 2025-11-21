@@ -3,7 +3,7 @@
 with lib;
 
 let
-  cfg = config.programs.webappManager;
+  cfg = config.programs.nix-webapps;
 
   # Browser type definition
   browserType = types.enum [ "firefox" "brave" "chromium" "zen" "vivaldi" "edge" ];
@@ -83,7 +83,7 @@ let
     let
       iconPath = "$HOME/.local/share/applications/icons/${name}.png";
       # Use per-app browser if specified, otherwise use defaultBrowser
-      browser = if app.browser != null then app.browser else cfg.defaultBrowser;
+      browser = if app.browser != null then app.browser else cfg.browser;
       # Use webapp-launcher generator if no custom exec is provided
       execCommand =
         if app.exec != null then
@@ -117,8 +117,8 @@ let
 
 in
 {
-  options.programs.webappManager = {
-    enable = mkEnableOption "Web Application Manager";
+  options.programs.nix-webapps = {
+    enable = mkEnableOption "Nix Web Applications Manager";
 
     apps = mkOption {
       type = types.attrsOf webappType;
@@ -139,10 +139,10 @@ in
       '';
     };
 
-    defaultBrowser = mkOption {
+    browser = mkOption {
       type = browserType;
       default = "firefox";
-      description = "Default browser to use for web applications";
+      description = "Default browser to use for all web applications";
       example = "brave";
     };
   };

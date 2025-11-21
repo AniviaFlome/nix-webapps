@@ -20,7 +20,7 @@ imports = [
 ## Example Configuration
 
 ```nix
-programs.webappManager = {
+programs.nix-webapps = {
 enable = true;
 
 apps = {
@@ -88,7 +88,7 @@ home-manager switch
 Simply add a new entry to the `apps` attribute set and rebuild:
 
 ```nix
-programs.webappManager.apps.todoist = {
+programs.nix-webapps.apps.todoist = {
 url = "https://todoist.com";
 # icon will be auto-fetched from https://todoist.com/favicon.ico
 comment = "Todoist Task Manager";

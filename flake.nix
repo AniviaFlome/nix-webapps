@@ -4,40 +4,33 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    flake-parts.url = "github:hercules-ci/flake-parts";
-
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = inputs @ { self, nixpkgs, flake-parts, treefmt-nix, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = { self, nixpkgs, treefmt-nix }:
+    let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      forAllSystems = nixpkgs.lib.genAttrs systems;
+    in
+    {
+      # Home Manager module
+      homeManagerModules.default = import ./webapp-manager.nix;
+      homeManagerModules.nix-webapps = import ./webapp-manager.nix;
 
-      imports = [
-        treefmt-nix.flakeModule
-      ];
-
-      perSystem = { config, self', inputs', pkgs, system, ... }: {
-        # Treefmt configuration
-        treefmt.config = {
-          projectRootFile = "flake.nix";
-          programs = {
-            nixpkgs-fmt.enable = true;
-            prettier.enable = true;
+      # Formatter for each system
+      formatter = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          treefmtEval = treefmt-nix.lib.evalModule pkgs {
+            projectRootFile = "flake.nix";
+            programs.nixpkgs-fmt.enable = true;
+            programs.prettier.enable = true;
           };
-        };
-
-        # Formatter for `nix fmt`
-        formatter = config.treefmt.build.wrapper;
-      };
-
-      flake = {
-        # Home Manager module
-        homeManagerModules.default = import ./webapp-manager.nix;
-        homeManagerModules.webappManager = import ./webapp-manager.nix;
-      };
+        in
+        treefmtEval.config.build.wrapper
+      );
     };
 }

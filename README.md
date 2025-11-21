@@ -34,13 +34,13 @@ A declarative Home Manager module for managing web application launchers on Linu
 ### Basic Configuration
 
 ```nix
-programs.webappManager = {
+programs.nix-webapps = {
   enable = true;
-  defaultBrowser = "brave";  # Set your preferred browser
+  browser = "brave";  # Set your preferred browser
 
   apps = {
     # Icon will be automatically fetched from Gmail's favicon
-    # Uses defaultBrowser (brave)
+    # Uses browser (brave)
     gmail = {
       url = "https://mail.google.com";
       comment = "Gmail Web App";
@@ -50,7 +50,7 @@ programs.webappManager = {
     github = {
       url = "https://github.com";
       icon = "https://github.githubassets.com/favicons/favicon.png";
-      browser = "firefox";  # Override defaultBrowser just for this app
+      browser = "firefox";  # Override browser just for this app
       comment = "GitHub";
     };
   };
@@ -60,13 +60,13 @@ programs.webappManager = {
 ### Advanced Configuration
 
 ```nix
-programs.webappManager = {
+programs.nix-webapps = {
   enable = true;
-  defaultBrowser = "brave";  # Global default
+  browser = "brave";  # Global default
 
   apps = {
     # Without icon - automatically fetches favicon
-    # Uses defaultBrowser (brave)
+    # Uses browser (brave)
     notion = {
       url = "https://notion.so";
       comment = "Notion Workspace";
@@ -109,7 +109,7 @@ Your web apps will appear in your application launcher (SUPER + SPACE).
 ### Module Options
 
 - **`enable`**: Enable the webapp manager module
-- **`defaultBrowser`**: Default browser to use for all web apps (default: `"firefox"`)
+- **`browser`**: Default browser to use for all web apps (default: `"firefox"`)
   - Supported: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
 - **`apps`**: Attribute set of web applications
 
@@ -117,17 +117,17 @@ Your web apps will appear in your application launcher (SUPER + SPACE).
 
 - **`url`** (required): The URL of the web application
 - **`icon`** (optional): Icon URL (will be downloaded) or local file path. If not specified, automatically fetches from `<url>/favicon.ico`
-- **`browser`** (optional): Browser to use for this specific app. Overrides `defaultBrowser`. Must be one of: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
-- **`exec`** (optional): Custom exec command. If specified, overrides both `browser` and `defaultBrowser`
+- **`browser`** (optional): Browser to use for this specific app. Overrides `browser`. Must be one of: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
+- **`exec`** (optional): Custom exec command. If specified, overrides both `browser` and `browser`
 - **`comment`** (optional): Description shown in app launcher
 - **`mimeTypes`** (optional): List of MIME types for protocol handling
 
 ## Supported Browsers
 
-Configure your preferred browser using the `defaultBrowser` option:
+Configure your preferred browser using the `browser` option:
 
 ```nix
-programs.webappManager.defaultBrowser = "brave";
+programs.nix-webapps.browser = "brave";
 ```
 
 Supported browsers:
@@ -146,7 +146,7 @@ You can override the browser for specific apps:
 ```nix
 apps.slack = {
   url = "https://slack.com";
-  browser = "firefox";  # Use Firefox instead of defaultBrowser
+  browser = "firefox";  # Use Firefox instead of browser
 };
 ```
 
