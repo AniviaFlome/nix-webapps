@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -6,7 +11,21 @@ let
   cfg = config.programs.nix-webapps;
 
   # Browser type definition
-  browserType = types.enum [ "firefox" "brave" "chromium" "zen" "vivaldi" "edge" ];
+  browserType = types.enum [
+    "brave"
+    "edge"
+    "chromium-browser"
+    "firefox"
+    "floorp"
+    "librewolf"
+    "google-chrome"
+    "mullvad"
+    "thorium"
+    "vivaldi"
+    "waterfox"
+    "zen"
+    "zen-beta"
+  ];
 
   # Type definition for a web app
   webappType = types.submodule {
@@ -65,7 +84,8 @@ let
   isUrl = str: hasPrefix "http://" str || hasPrefix "https://" str;
 
   # Helper function to extract base URL from a full URL
-  getBaseUrl = url:
+  getBaseUrl =
+    url:
     let
       # Extract protocol and domain from URL
       matches = builtins.match "(https?://[^/]+).*" url;
@@ -73,7 +93,8 @@ let
     if matches != null then builtins.head matches else url;
 
   # Helper function to get icon path for desktop file
-  getIconPath = name: app:
+  getIconPath =
+    name: app:
     let
       # Determine the icon URL to use
       iconUrl = if app.icon == null then "${getBaseUrl app.url}/favicon.ico" else app.icon;
@@ -84,29 +105,29 @@ let
         if app.sha != null then
           app.sha
         else if app.icon == null then
-        # Auto-fetch favicon: use fake SHA which will fail with real hash
+          # Auto-fetch favicon: use fake SHA which will fail with real hash
           lib.fakeSha256
         else
           null;
     in
     if isIconUrl && iconSha != null then
-    # Download icon at build time with fetchurl
-      pkgs.fetchurl
-        {
-          url = iconUrl;
-          sha256 = iconSha;
-          name = "${name}-icon";
-        }
+      # Download icon at build time with fetchurl
+      pkgs.fetchurl {
+        url = iconUrl;
+        sha256 = iconSha;
+        name = "${name}-icon";
+      }
     else if isIconUrl then
-      null  # URL without SHA256 - skip icon
+      null # URL without SHA256 - skip icon
     else if iconUrl != null then
-    # Local file path
+      # Local file path
       iconUrl
     else
       null;
 
   # Generate .desktop file content
-  makeDesktopFile = name: app:
+  makeDesktopFile =
+    name: app:
     let
       iconPath = getIconPath name app;
       # Use per-app browser if specified, otherwise use defaultBrowser
@@ -119,21 +140,14 @@ let
           let
             launcher = pkgs.callPackage ./webapp-launcher.nix {
               inherit browser;
-              url = app.url;
+              inherit (app) url;
               appName = name;
             };
           in
           "${launcher}/bin/webapp-launcher-${name}";
       mimeTypeStr =
-        if app.mimeTypes != [ ] then
-          "MimeType=${concatStringsSep ";" app.mimeTypes};\n"
-        else
-          "";
-      iconStr =
-        if iconPath != null then
-          "Icon=${iconPath}\n"
-        else
-          "";
+        if app.mimeTypes != [ ] then "MimeType=${concatStringsSep ";" app.mimeTypes};\n" else "";
+      iconStr = if iconPath != null then "Icon=${iconPath}\n" else "";
     in
     pkgs.writeText "${name}.desktop" ''
       [Desktop Entry]
@@ -180,12 +194,11 @@ in
 
   config = mkIf cfg.enable {
     # Generate .desktop files for each web app
-    xdg.dataFile = mapAttrs'
-      (name: app:
-        nameValuePair "applications/${name}.desktop" {
-          source = makeDesktopFile name app;
-        }
-      )
-      cfg.apps;
+    xdg.dataFile = mapAttrs' (
+      name: app:
+      nameValuePair "applications/${name}.desktop" {
+        source = makeDesktopFile name app;
+      }
+    ) cfg.apps;
   };
 }

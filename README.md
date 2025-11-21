@@ -10,12 +10,10 @@ A declarative Home Manager module for managing web application launchers on Linu
 - **Standalone Launcher**: Built-in webapp launcher (no external dependencies)
 - **Multi-Browser Support**: Automatically detects and uses available browsers
   - Supported: Zen Browser, Brave, Firefox, Chromium, Vivaldi, Microsoft Edge
-  - Auto-fallback to first available browser
   - Optional browser preference per app
 - **Custom Commands**: Support for custom exec commands
 - **Protocol Handlers**: MIME type support for handling custom protocols
 - **Type Safe**: Uses Nix's type system for validation
-- **Formatting**: Integrated treefmt support for code quality
 
 ## Installation
 
@@ -46,6 +44,7 @@ A declarative Home Manager module for managing web application launchers on Linu
     # Uses browser (brave)
     gmail = {
       url = "https://mail.google.com";
+      icon = null;
       comment = "Gmail Web App";
     };
 
@@ -53,6 +52,7 @@ A declarative Home Manager module for managing web application launchers on Linu
     github = {
       url = "https://github.com";
       icon = "https://github.githubassets.com/favicons/favicon.png";
+      sha = "sha256-";
       browser = "firefox";  # Override browser just for this app
       comment = "GitHub";
     };
@@ -73,12 +73,14 @@ programs.nix-webapps = {
     # Uses browser (brave)
     notion = {
       url = "https://notion.so";
+      icon = null;
       comment = "Notion Workspace";
     };
 
     # Override browser for specific app
     slack = {
       url = "https://slack.com";
+      icon = null;
       browser = "firefox";  # Will open in Firefox instead of Brave
       comment = "Slack";
     };
@@ -86,6 +88,7 @@ programs.nix-webapps = {
     # With MIME types for protocol handling
     discord = {
       url = "https://discord.com/app";
+      icon = null;
       mimeTypes = [ "x-scheme-handler/discord" ];
       comment = "Discord";
     };

@@ -1,6 +1,11 @@
 # Webapp launcher generator
 # Generates a launcher script for a specific browser and URL
-{ pkgs, browser, url, appName }:
+{
+  pkgs,
+  browser,
+  url,
+  appName,
+}:
 
 let
   # Extract domain from URL for window class
@@ -10,25 +15,30 @@ let
   appClass = "WebApp-${builtins.replaceStrings [ "." ] [ "-" ] baseDomain}";
 
   # Browser categorization by engine
-  isChromiumBased = builtins.elem browser [ "brave" "chromium" "vivaldi" "edge" ];
-  isFirefoxBased = builtins.elem browser [ "firefox" "zen" ];
-
-  # Browser executable mapping
-  browserCmd = {
-    firefox = "firefox";
-    brave = "brave";
-    chromium = "chromium";
-    zen = "zen-browser";
-    vivaldi = "vivaldi";
-    edge = "microsoft-edge";
-  }.${browser};
+  isChromiumBased = builtins.elem browser [
+    "brave"
+    "chromium"
+    "edge"
+    "google-chrome"
+    "thorium"
+    "vivaldi"
+  ];
+  isFirefoxBased = builtins.elem browser [
+    "firefox"
+    "floorp"
+    "librewolf"
+    "mullvad"
+    "waterfox"
+    "zen"
+    "zen-beta"
+  ];
 
   # Generate exec command based on browser engine
   execCommand =
     if isChromiumBased then
-      "${browserCmd} --new-window --class=\"${appClass}\" --app=\"${url}\""
+      "${browser} --new-window --class=\"${appClass}\" --app=\"${url}\""
     else if isFirefoxBased then
-      "${browserCmd} --new-window --class \"${appClass}\" \"${url}\""
+      "${browser} --new-window --class \"${appClass}\" \"${url}\""
     else
       throw "Unsupported browser: ${browser}";
 
