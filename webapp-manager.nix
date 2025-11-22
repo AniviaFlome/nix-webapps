@@ -118,7 +118,7 @@ let
   getIconPath =
     name: app:
     let
-      iconUrl = app.icon or "${getBaseUrl app.url}/favicon.ico";
+      iconUrl = if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
       isIconUrl = isUrl iconUrl;
     in
     if isIconUrl then
@@ -165,7 +165,7 @@ let
       [Desktop Entry]
       Version=1.0
       Name=${name}
-      Comment=${app.comment or name}
+      Comment=${if app.comment != "" then app.comment else name}
       Exec=${execCommand}
       Terminal=false
       Type=Application
