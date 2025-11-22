@@ -10,15 +10,15 @@ with lib;
 let
   cfg = config.programs.nix-webapps;
 
-  # Browser type definition
+  # Supported browser types
   browserType = types.enum [
     "brave"
-    "edge"
     "chromium-browser"
+    "edge"
     "firefox"
     "floorp"
-    "librewolf"
     "google-chrome"
+    "librewolf"
     "mullvad"
     "thorium"
     "vivaldi"
@@ -39,35 +39,55 @@ let
       icon = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Icon URL or local file path. If URL, must also provide sha.";
+        description = ''
+          Icon URL or local file path.
+          Defaults to <baseUrl>/favicon.ico if not specified.
+          For URL icons, nix will attempt to fetch with the provided sha (or fakeSha256 if not provided).
+        '';
         example = "https://github.com/favicon.ico";
       };
 
       sha = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "SHA256 hash of the icon file (required for URL icons). Get with: nix-prefetch-url <url>";
+        type = types.str;
+        default = lib.fakeSha256;
+        description = ''
+          SHA256 hash of the icon file (required for URL icons).
+          Defaults to fakeSha256 which will fail on first build and show the correct hash.
+          Get the hash with: nix-prefetch-url <url>
+        '';
         example = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
       };
 
       browser = mkOption {
         type = types.nullOr browserType;
         default = null;
-        description = "Browser to use for this app. If null, uses defaultBrowser.";
+        description = "Browser to use for this app. If not set, uses the global default.";
         example = "brave";
       };
 
       exec = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Custom exec command. If null, uses the webapp-launcher with configured browser.";
-        example = "custom-browser-launcher %U";
+        description = ''
+          Custom exec command for launching the web app.
+
+          This option allows you to override the default webapp-launcher behavior.
+          Use cases include:
+          - Using a different browser/profile not supported by webapp-launcher
+          - Adding custom command-line flags or environment variables
+          - Using proprietary or custom web app launchers (e.g., Spotify, Discord desktop apps)
+          - Wrapping the launch command with additional tools (e.g., firejail, bubblewrap)
+
+          If null, automatically generates a webapp-launcher script using the configured browser.
+          The %U placeholder will be replaced with the URL being opened.
+        '';
+        example = "firejail --profile=webapp chromium --app=%U";
       };
 
       comment = mkOption {
         type = types.str;
         default = "";
-        description = "Comment/description for the application";
+        description = "Comment/description for the application. Defaults to app name if empty.";
         example = "My favorite web app";
       };
 
@@ -80,63 +100,44 @@ let
     };
   };
 
-  # Helper function to determine if icon is a URL
+  # Determine if a string is a URL
   isUrl = str: hasPrefix "http://" str || hasPrefix "https://" str;
 
-  # Helper function to extract base URL from a full URL
+  # Extract base URL (protocol + domain) from a full URL
+  # Example: "https://mail.google.com/path" -> "https://mail.google.com"
   getBaseUrl =
     url:
     let
-      # Extract protocol and domain from URL
       matches = builtins.match "(https?://[^/]+).*" url;
     in
+    # If regex matches, return the captured group; otherwise return original URL
     if matches != null then builtins.head matches else url;
 
-  # Helper function to get icon path for desktop file
+  # Get icon path for desktop file
+  # If icon is a URL, fetch it at build time; otherwise use local path
   getIconPath =
     name: app:
     let
-      # Determine the icon URL to use
-      iconUrl = if app.icon == null then "${getBaseUrl app.url}/favicon.ico" else app.icon;
-      # Determine if it's a URL
+      iconUrl = app.icon or "${getBaseUrl app.url}/favicon.ico";
       isIconUrl = isUrl iconUrl;
-      # Use provided SHA or fake SHA for auto-fetched favicons
-      iconSha =
-        if app.sha != null then
-          app.sha
-        else if app.icon == null then
-          # Auto-fetch favicon: use fake SHA which will fail with real hash
-          lib.fakeSha256
-        else
-          null;
     in
-    if isIconUrl && iconSha != null then
-      # Download icon at build time with fetchurl
+    if isIconUrl then
       pkgs.fetchurl {
         url = iconUrl;
-        sha256 = iconSha;
+        sha256 = app.sha; # Defaults to lib.fakeSha256
         name = "${name}-icon";
       }
-    else if isIconUrl then
-      null # URL without SHA256 - skip icon
-    else if iconUrl != null then
-      # Local file path
-      iconUrl
     else
-      null;
+      iconUrl; # Local file path
 
   # Generate .desktop file content
   makeDesktopFile =
     name: app:
     let
       iconPath = getIconPath name app;
-      # Use per-app browser if specified, otherwise use defaultBrowser
-      browser = if app.browser != null then app.browser else cfg.browser;
-      # Use webapp-launcher generator if no custom exec is provided
+      browser = app.browser or cfg.browser;
       execCommand =
-        if app.exec != null then
-          app.exec
-        else
+        app.exec or (
           let
             launcher = pkgs.callPackage ./webapp-launcher.nix {
               inherit browser;
@@ -144,16 +145,18 @@ let
               appName = name;
             };
           in
-          "${launcher}/bin/webapp-launcher-${name}";
-      mimeTypeStr =
-        if app.mimeTypes != [ ] then "MimeType=${concatStringsSep ";" app.mimeTypes};\n" else "";
-      iconStr = if iconPath != null then "Icon=${iconPath}\n" else "";
+          "${launcher}/bin/webapp-launcher-${name}"
+        );
+      mimeTypeStr = optionalString (
+        app.mimeTypes != [ ]
+      ) "MimeType=${concatStringsSep ";" app.mimeTypes};\n";
+      iconStr = optionalString (iconPath != null) "Icon=${iconPath}\n";
     in
     pkgs.writeText "${name}.desktop" ''
       [Desktop Entry]
       Version=1.0
       Name=${name}
-      Comment=${if app.comment != "" then app.comment else name}
+      Comment=${app.comment or name}
       Exec=${execCommand}
       Terminal=false
       Type=Application
@@ -185,9 +188,12 @@ in
     };
 
     browser = mkOption {
-      type = browserType;
-      default = "firefox";
-      description = "Default browser to use for all web applications";
+      type = types.nullOr browserType;
+      default = null;
+      description = ''
+        Default browser to use for all web applications.
+        If not set, must specify browser per-app.
+      '';
       example = "brave";
     };
   };
