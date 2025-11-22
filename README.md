@@ -1,6 +1,7 @@
 # Nix Web App Manager
 
 A nix flake that declares web applications.
+It doesn't support firefox currently. But when new browser.taskbarTabs.enabled setting is available on linux, firefox will be supported.
 
 ## Features
 
