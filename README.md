@@ -1,6 +1,6 @@
 # Nix Web App Manager
 
-A declarative Home Manager module for managing web application launchers on Linux.
+A nix flake that declares web applications.
 
 ## Features
 
