@@ -135,17 +135,13 @@ let
     name: app:
     let
       iconPath = getIconPath name app;
-      browser = app.browser or cfg.browser;
+      browser = if app.browser != null then app.browser else cfg.browser;
       execCommand =
         if app.exec != null then
           app.exec
         else if browser == null then
           throw ''
             Web app "${name}" requires a browser to be specified.
-            Debug info:
-              - app.browser = ${toString app.browser}
-              - cfg.browser = ${toString cfg.browser}
-              - resolved browser = ${toString browser}
             Either set:
               - programs.nix-webapps.browser (global default), or
               - programs.nix-webapps.apps.${name}.browser (per-app), or
