@@ -137,7 +137,17 @@ let
       iconPath = getIconPath name app;
       browser = app.browser or cfg.browser;
       execCommand =
-        app.exec or (
+        if app.exec != null then
+          app.exec
+        else if browser == null then
+          throw ''
+            Web app "${name}" requires a browser to be specified.
+            Either set:
+              - programs.nix-webapps.browser (global default), or
+              - programs.nix-webapps.apps.${name}.browser (per-app), or
+              - programs.nix-webapps.apps.${name}.exec (custom launcher)
+          ''
+        else
           let
             launcher = pkgs.callPackage ./webapp-launcher.nix {
               inherit browser;
@@ -145,8 +155,7 @@ let
               appName = name;
             };
           in
-          "${launcher}/bin/webapp-launcher-${name}"
-        );
+          "${launcher}/bin/webapp-launcher-${name}";
       mimeTypeStr = optionalString (
         app.mimeTypes != [ ]
       ) "MimeType=${concatStringsSep ";" app.mimeTypes};\n";
