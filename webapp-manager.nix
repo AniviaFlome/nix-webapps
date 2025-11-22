@@ -142,6 +142,10 @@ let
         else if browser == null then
           throw ''
             Web app "${name}" requires a browser to be specified.
+            Debug info:
+              - app.browser = ${toString app.browser}
+              - cfg.browser = ${toString cfg.browser}
+              - resolved browser = ${toString browser}
             Either set:
               - programs.nix-webapps.browser (global default), or
               - programs.nix-webapps.apps.${name}.browser (per-app), or
