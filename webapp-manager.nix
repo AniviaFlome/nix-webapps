@@ -136,6 +136,32 @@ let
     let
       iconPath = getIconPath name app;
       browser = if app.browser != null then app.browser else cfg.browser;
+
+      # Extract domain for window class
+      domain = builtins.replaceStrings [ "https://" "http://" ] [ "" "" ] app.url;
+      domainParts = builtins.split "/" domain;
+      baseDomain = builtins.head domainParts;
+      appClass = "WebApp-${builtins.replaceStrings [ "." ] [ "-" ] baseDomain}";
+
+      # Browser categorization by engine
+      isChromiumBased = builtins.elem browser [
+        "brave"
+        "chromium-browser"
+        "edge"
+        "google-chrome"
+        "thorium"
+        "vivaldi"
+      ];
+      isFirefoxBased = builtins.elem browser [
+        "firefox"
+        "floorp"
+        "librewolf"
+        "mullvad"
+        "waterfox"
+        "zen"
+        "zen-beta"
+      ];
+
       execCommand =
         if app.exec != null then
           app.exec
@@ -147,15 +173,12 @@ let
               - programs.nix-webapps.apps.${name}.browser (per-app), or
               - programs.nix-webapps.apps.${name}.exec (custom launcher)
           ''
+        else if isChromiumBased then
+          ''${browser} --new-window --class="${appClass}" --app="${app.url}"''
+        else if isFirefoxBased then
+          ''${browser} --new-window --class "${appClass}" "${app.url}"''
         else
-          let
-            launcher = pkgs.callPackage ./webapp-launcher.nix {
-              inherit browser;
-              inherit (app) url;
-              appName = name;
-            };
-          in
-          "${launcher}/bin/webapp-launcher-${name}";
+          throw "Unsupported browser: ${browser}";
       mimeTypeStr = optionalString (
         app.mimeTypes != [ ]
       ) "MimeType=${concatStringsSep ";" app.mimeTypes};\n";
