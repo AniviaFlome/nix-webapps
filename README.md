@@ -190,40 +190,6 @@ The webapp launcher categorizes browsers by their rendering engine:
 
 Each category uses engine-appropriate flags for optimal webapp integration.
 
-## Compared to Bash Scripts
-
-### Bash Script Approach
-
-- Manual icon downloading with `curl`
-- Imperative add/remove scripts
-- State managed in filesystem
-- Requires interactive commands to manage apps
-- External dependencies for launching
-
-### Nix Module Approach
-
-- Automatic icon handling (or automatic favicon fetch)
-- Declarative configuration
-- State managed in Nix configuration
-- Add/remove apps by editing config and rebuilding
-- Reproducible across systems
-- Type-safe configuration
-- Built-in standalone launcher
-- No external dependencies
-
-## Requirements
-
-This module requires:
-
-- Nix with flakes enabled (recommended) or Home Manager
-- At least one supported browser installed: Firefox, Brave, Chromium, Zen, Vivaldi, or Edge
-- XDG directories configured
-
-## File Locations
-
-- Desktop files: `~/.local/share/applications/<app-name>.desktop`
-- Icons: `~/.local/share/applications/icons/<app-name>.png`
-
 ## License
 
 MIT
