@@ -1,7 +1,6 @@
 # Nix Web App Manager
 
 A nix flake that declares web applications.
-It doesn't support firefox currently. But when new browser.taskbarTabs.enabled setting is available on linux, firefox will be supported.
 
 ## Features
 
@@ -117,8 +116,8 @@ Your web apps will appear in your application launcher (SUPER + SPACE).
 ### Module Options
 
 - **`enable`**: Enable the webapp manager module
-- **`browser`**: Default browser to use for all web apps (default: `"firefox"`)
-  - Supported: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
+- **`browser`**: Default browser to use for all web apps (default: `null` - must be specified)
+  - Supported: `"brave"`, `"chromium-browser"`, `"edge"`, `"firefox"`, `"floorp"`, `"google-chrome"`, `"librewolf"`, `"mullvad"`, `"thorium"`, `"vivaldi"`, `"waterfox"`, `"zen"`, `"zen-beta"`
 - **`apps`**: Attribute set of web applications
 
 ### Per-App Options
@@ -126,7 +125,7 @@ Your web apps will appear in your application launcher (SUPER + SPACE).
 - **`url`** (required): The URL of the web application
 - **`icon`** (optional): Icon URL (will be downloaded) or local file path. If not specified, automatically fetches from `<url>/favicon.ico`
 - **`browser`** (optional): Browser to use for this specific app. Overrides `browser`. Must be one of: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
-- **`exec`** (optional): Custom exec command. If specified, overrides both `browser` and `browser`
+- **`exec`** (optional): Custom exec command. If specified, overrides the browser setting
 - **`comment`** (optional): Description shown in app launcher
 - **`mimeTypes`** (optional): List of MIME types for protocol handling
 
@@ -140,12 +139,19 @@ programs.nix-webapps.browser = "brave";
 
 Supported browsers:
 
-- `"firefox"` - Mozilla Firefox
 - `"brave"` - Brave Browser
-- `"chromium"` - Chromium
-- `"zen"` - Zen Browser
-- `"vivaldi"` - Vivaldi
+- `"chromium-browser"` - Chromium
 - `"edge"` - Microsoft Edge
+- `"firefox"` - Mozilla Firefox
+- `"floorp"` - Floorp Browser
+- `"google-chrome"` - Google Chrome
+- `"librewolf"` - LibreWolf
+- `"mullvad"` - Mullvad Browser
+- `"thorium"` - Thorium Browser
+- `"vivaldi"` - Vivaldi
+- `"waterfox"` - Waterfox
+- `"zen"` - Zen Browser
+- `"zen-beta"` - Zen Browser (Beta)
 
 ### Per-App Browser Override
 
@@ -160,7 +166,7 @@ apps.slack = {
 
 ## Examples
 
-See [example-config.nix](./example-config.nix) for comprehensive examples.
+See the [Usage](#usage) section above for comprehensive examples.
 
 ## Development
 

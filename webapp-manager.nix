@@ -100,9 +100,6 @@ let
     };
   };
 
-  # Determine if a string is a URL
-  isUrl = str: hasPrefix "http://" str || hasPrefix "https://" str;
-
   # Extract base URL (protocol + domain) from a full URL
   # Example: "https://mail.google.com/path" -> "https://mail.google.com"
   getBaseUrl =
@@ -118,17 +115,17 @@ let
   getIconPath =
     name: app:
     let
-      iconUrl = if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
-      isIconUrl = isUrl iconUrl;
+      iconSource = if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
+      isRemote = hasPrefix "http://" iconSource || hasPrefix "https://" iconSource;
     in
-    if isIconUrl then
+    if isRemote then
       pkgs.fetchurl {
-        url = iconUrl;
+        url = iconSource;
         sha256 = app.sha; # Defaults to lib.fakeSha256
         name = "${name}-icon";
       }
     else
-      iconUrl; # Local file path
+      iconSource; # Local file path
 
   # Generate .desktop file content
   makeDesktopFile =
@@ -182,7 +179,7 @@ let
       mimeTypeStr = optionalString (
         app.mimeTypes != [ ]
       ) "MimeType=${concatStringsSep ";" app.mimeTypes};\n";
-      iconStr = optionalString (iconPath != null) "Icon=${iconPath}\n";
+      iconStr = "Icon=${iconPath}\n";
     in
     pkgs.writeText "${name}.desktop" ''
       [Desktop Entry]
