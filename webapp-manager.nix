@@ -272,38 +272,52 @@ in
         # Define the launcher script
         pwaLauncher = pkgs.writeShellScriptBin "nix-webapps-launch-pwa-${name}" ''
           set -euo pipefail
+          
+          # Fix PATH to ensure we have grep, awk, etc.
+          export PATH="${lib.makeBinPath [ pkgs.coreutils pkgs.gnugrep pkgs.gawk ]}:$PATH"
+
+          LOG_FILE="/tmp/nix-webapps-${name}.log"
+          echo "[$(date)] Launching ${name}..." >> "$LOG_FILE"
+          
+          # Redirect stderr to log for debugging
+          exec 2>>"$LOG_FILE"
 
           APP_NAME="${name}"
           APP_URL="${app.url}"
           MANIFEST_URL="${if app.pwa.manifest != null then app.pwa.manifest else "${app.url}/manifest.json"}"
           PROFILE="${app.pwa.profile}"
+          
+          echo "Checking PWA for URL: $APP_URL" >> "$LOG_FILE"
 
           # Check if specific firefoxpwa ID is provided manually, otherwise try to find/install
           SITE_ID="${if app.firefoxPwaId != null then app.firefoxPwaId else ""}"
 
           if [ -z "$SITE_ID" ]; then
-            # Try to find existing installation by manifest URL (heuristic)
-            # Output format: ID|Name|Smart Name|Version|URL|Manifest URL|...
-            # We use simple grep for now.
+            # Find existing by Manifest URL
+            # We use || true to ensure grep failure doesn't crash the script immediately due to pipefail/set -e
+            # but we need to handle the empty output case.
             EXISTING_ID=$(${pkgs.firefoxpwa}/bin/firefoxpwa site list | grep "$MANIFEST_URL" | awk '{print $1}' | head -n1 || true)
             
             if [ -n "$EXISTING_ID" ]; then
+              echo "Found existing installation: $EXISTING_ID" >> "$LOG_FILE"
               SITE_ID="$EXISTING_ID"
             else
               # Install if not found
-              echo "Installing PWA for $APP_NAME..."
+              echo "Installing PWA for $APP_NAME..." >> "$LOG_FILE"
               # We use a temporary icon file if needed, but for now let firefoxpwa fetch it
-              ${pkgs.firefoxpwa}/bin/firefoxpwa site install "$MANIFEST_URL" --name "$APP_NAME" --profile "$PROFILE" --no-system-integration
+              ${pkgs.firefoxpwa}/bin/firefoxpwa site install "$MANIFEST_URL" --name "$APP_NAME" --profile "$PROFILE" --no-system-integration >> "$LOG_FILE" 2>&1
               
               # Get the ID of the just installed site
               SITE_ID=$(${pkgs.firefoxpwa}/bin/firefoxpwa site list | grep "$MANIFEST_URL" | awk '{print $1}' | head -n1)
+              echo "Installed with ID: $SITE_ID" >> "$LOG_FILE"
             fi
           fi
 
           if [ -n "$SITE_ID" ]; then
+            echo "Launching site ID: $SITE_ID" >> "$LOG_FILE"
             exec ${pkgs.firefoxpwa}/bin/firefoxpwa site launch "$SITE_ID"
           else
-            echo "Failed to resolve or install PWA site ID."
+            echo "Failed to resolve or install PWA site ID." >> "$LOG_FILE"
             exit 1
           fi
         '';
