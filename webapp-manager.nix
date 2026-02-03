@@ -15,16 +15,10 @@ let
     "brave"
     "chromium-browser"
     "edge"
-    "firefox"
-    "floorp"
     "google-chrome"
-    "librewolf"
-    "mullvad"
+    "helium"
     "thorium"
     "vivaldi"
-    "waterfox"
-    "zen"
-    "zen-beta"
   ];
 
   # Type definition for a web app
@@ -97,35 +91,6 @@ let
         description = "List of MIME types this application handles";
         example = [ "x-scheme-handler/slack" ];
       };
-
-      firefoxPwaId = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Firefox PWA Site ID (ULID) for launching with firefoxpwa (Optional if pwa.enable is true)";
-        example = "01GQD9S60... (13-26 character ULID)";
-      };
-
-      pwa = mkOption {
-        default = { };
-        description = "Declarative Firefox PWA configuration";
-        type = types.submodule {
-          options = {
-            enable = mkEnableOption "declarative Firefox PWA support";
-
-            manifest = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = "URL to the web app manifest. Defaults to <url>/manifest.json";
-            };
-
-            profile = mkOption {
-              type = types.str;
-              default = "default";
-              description = "Firefox profile to use/install into";
-            };
-          };
-        };
-      };
     };
   };
 
@@ -175,17 +140,9 @@ let
         "chromium-browser"
         "edge"
         "google-chrome"
+        "helium"
         "thorium"
         "vivaldi"
-      ];
-      isFirefoxBased = builtins.elem browser [
-        "firefox"
-        "floorp"
-        "librewolf"
-        "mullvad"
-        "waterfox"
-        "zen"
-        "zen-beta"
       ];
 
       execCommand =
@@ -201,10 +158,6 @@ let
           ''
         else if isChromiumBased then
           ''${browser} --new-window --class="${appClass}" --app="${app.url}"''
-        else if isFirefoxBased && app.firefoxPwaId != null then
-          "${pkgs.firefoxpwa}/bin/firefoxpwa site launch ${app.firefoxPwaId}"
-        else if isFirefoxBased then
-          ''${browser} --new-window --class "${appClass}" "${app.url}"''
         else
           throw "Unsupported browser: ${browser}";
       mimeTypeStr = optionalString (
@@ -256,78 +209,14 @@ in
       '';
       example = "brave";
     };
-
-    firefox = {
-      enablePwa = mkEnableOption "Firefox PWA support (installs firefoxpwa)";
-    };
   };
 
   config = mkIf cfg.enable {
-    home.packages = mkIf cfg.firefox.enablePwa (with pkgs; [ firefoxpwa ]);
-
     # Generate .desktop files for each web app
     xdg.dataFile = mapAttrs' (
       name: app:
-      let
-        # Define the launcher script
-        pwaLauncher = pkgs.writeShellScriptBin "nix-webapps-launch-pwa-${name}" ''
-          set -euo pipefail
-          
-          # Fix PATH to ensure we have grep, awk, etc.
-          export PATH="${lib.makeBinPath [ pkgs.coreutils pkgs.gnugrep pkgs.gawk ]}:$PATH"
-
-          LOG_FILE="/tmp/nix-webapps-${name}.log"
-          echo "[$(date)] Launching ${name}..." >> "$LOG_FILE"
-          
-          # Redirect stderr to log for debugging
-          exec 2>>"$LOG_FILE"
-
-          APP_NAME="${name}"
-          APP_URL="${app.url}"
-          MANIFEST_URL="${if app.pwa.manifest != null then app.pwa.manifest else "${app.url}/manifest.json"}"
-          PROFILE="${app.pwa.profile}"
-          
-          echo "Checking PWA for URL: $APP_URL" >> "$LOG_FILE"
-
-          # Check if specific firefoxpwa ID is provided manually, otherwise try to find/install
-          SITE_ID="${if app.firefoxPwaId != null then app.firefoxPwaId else ""}"
-
-          if [ -z "$SITE_ID" ]; then
-            # Find existing by Manifest URL
-            # We use || true to ensure grep failure doesn't crash the script immediately due to pipefail/set -e
-            # but we need to handle the empty output case.
-            EXISTING_ID=$(${pkgs.firefoxpwa}/bin/firefoxpwa site list | grep "$MANIFEST_URL" | awk '{print $1}' | head -n1 || true)
-            
-            if [ -n "$EXISTING_ID" ]; then
-              echo "Found existing installation: $EXISTING_ID" >> "$LOG_FILE"
-              SITE_ID="$EXISTING_ID"
-            else
-              # Install if not found
-              echo "Installing PWA for $APP_NAME..." >> "$LOG_FILE"
-              # We use a temporary icon file if needed, but for now let firefoxpwa fetch it
-              ${pkgs.firefoxpwa}/bin/firefoxpwa site install "$MANIFEST_URL" --name "$APP_NAME" --profile "$PROFILE" --no-system-integration >> "$LOG_FILE" 2>&1
-              
-              # Get the ID of the just installed site
-              SITE_ID=$(${pkgs.firefoxpwa}/bin/firefoxpwa site list | grep "$MANIFEST_URL" | awk '{print $1}' | head -n1)
-              echo "Installed with ID: $SITE_ID" >> "$LOG_FILE"
-            fi
-          fi
-
-          if [ -n "$SITE_ID" ]; then
-            echo "Launching site ID: $SITE_ID" >> "$LOG_FILE"
-            exec ${pkgs.firefoxpwa}/bin/firefoxpwa site launch "$SITE_ID"
-          else
-            echo "Failed to resolve or install PWA site ID." >> "$LOG_FILE"
-            exit 1
-          fi
-        '';
-      in
       nameValuePair "applications/${name}.desktop" {
-        source =
-          if app.pwa.enable then
-            makeDesktopFile name (app // { exec = "${pwaLauncher}/bin/nix-webapps-launch-pwa-${name}"; })
-          else
-            makeDesktopFile name app;
+        source = makeDesktopFile name app;
       }
     ) cfg.apps;
   };
