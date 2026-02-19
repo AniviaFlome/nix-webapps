@@ -2,18 +2,15 @@
 
 A nix flake that declares web applications.
 
-## Features
+Supported browsers:
 
-- **Declarative Configuration**: Define all your web apps in your Nix configuration
-- **Automatic Icon Management**: Icons are optional - automatically fetches favicons when not specified
-- **Desktop Integration**: Generates `.desktop` files for app launcher integration
-- **Standalone Launcher**: Built-in webapp launcher (no external dependencies)
-- **Multi-Browser Support**: Automatically detects and uses available browsers
-  - Supported: Zen Browser, Brave, Firefox, Chromium, Vivaldi, Microsoft Edge
-  - Optional browser preference per app
-- **Custom Commands**: Support for custom exec commands
-- **Protocol Handlers**: MIME type support for handling custom protocols
-- **Type Safe**: Uses Nix's type system for validation
+- `"brave"` - Brave Browser
+- `"chromium-browser"` - Chromium
+- `"edge"` - Microsoft Edge
+- `"google-chrome"` - Google Chrome
+- `"helium"` - Helium Browser
+- `"thorium"` - Thorium Browser
+- `"vivaldi"` - Vivaldi
 
 ## Installation
 
@@ -29,7 +26,7 @@ A nix flake that declares web applications.
 
 ## Usage
 
-### Basic Configuration
+### Example Configuration
 
 ```nix
 {
@@ -53,7 +50,7 @@ A nix flake that declares web applications.
       url = "https://github.com";
       icon = "https://github.githubassets.com/favicons/favicon.png";
       sha = "sha256-";
-      browser = "firefox";  # Override browser just for this app
+      browser = "chromium-browser";  # Override browser just for this app
       comment = "GitHub";
     };
   };
@@ -61,141 +58,20 @@ A nix flake that declares web applications.
 }
 ```
 
-### Advanced Configuration
-
-```nix
-programs.nix-webapps = {
-  enable = true;
-  browser = "brave";  # Global default
-
-  apps = {
-    # Without icon - automatically fetches favicon
-    # Uses browser (brave)
-    notion = {
-      url = "https://notion.so";
-      icon = null;
-      comment = "Notion Workspace";
-    };
-
-    # Override browser for specific app
-    slack = {
-      url = "https://slack.com";
-      icon = null;
-      browser = "firefox";  # Will open in Firefox instead of Brave
-      comment = "Slack";
-    };
-
-    # With MIME types for protocol handling
-    discord = {
-      url = "https://discord.com/app";
-      icon = null;
-      mimeTypes = [ "x-scheme-handler/discord" ];
-      comment = "Discord";
-    };
-
-    # With local icon file
-    custom-app = {
-      url = "https://example.com";
-      icon = ./icons/custom.png;
-      comment = "Custom App";
-    };
-  };
-};
-```
-
-### Apply Changes
-
-```bash
-home-manager switch
-```
-
-Your web apps will appear in your application launcher (SUPER + SPACE).
-
 ## Configuration Options
 
 ### Module Options
 
 - **`enable`**: Enable the webapp manager module
 - **`browser`**: Default browser to use for all web apps (default: `null` - must be specified)
-  - Supported: `"brave"`, `"chromium-browser"`, `"edge"`, `"firefox"`, `"floorp"`, `"google-chrome"`, `"librewolf"`, `"mullvad"`, `"thorium"`, `"vivaldi"`, `"waterfox"`, `"zen"`, `"zen-beta"`
+  - Supported: `"brave"`, `"chromium-browser"`, `"edge"`, `"google-chrome"`, `"helium"`, `"thorium"`, `"vivaldi"`
 - **`apps`**: Attribute set of web applications
 
 ### Per-App Options
 
 - **`url`** (required): The URL of the web application
 - **`icon`** (optional): Icon URL (will be downloaded) or local file path. If not specified, automatically fetches from `<url>/favicon.ico`
-- **`browser`** (optional): Browser to use for this specific app. Overrides `browser`. Must be one of: `"firefox"`, `"brave"`, `"chromium"`, `"zen"`, `"vivaldi"`, `"edge"`
+- **`browser`** (optional): Browser to use for this specific app. Overrides `browser`. Must be one of: `"brave"`, `"chromium-browser"`, `"edge"`, `"google-chrome"`, `"helium"`, `"thorium"`, `"vivaldi"`
 - **`exec`** (optional): Custom exec command. If specified, overrides the browser setting
 - **`comment`** (optional): Description shown in app launcher
 - **`mimeTypes`** (optional): List of MIME types for protocol handling
-
-## Supported Browsers
-
-Configure your preferred browser using the `browser` option:
-
-```nix
-programs.nix-webapps.browser = "brave";
-```
-
-Supported browsers:
-
-- `"brave"` - Brave Browser
-- `"chromium-browser"` - Chromium
-- `"edge"` - Microsoft Edge
-- `"firefox"` - Mozilla Firefox
-- `"floorp"` - Floorp Browser
-- `"google-chrome"` - Google Chrome
-- `"librewolf"` - LibreWolf
-- `"mullvad"` - Mullvad Browser
-- `"thorium"` - Thorium Browser
-- `"vivaldi"` - Vivaldi
-- `"waterfox"` - Waterfox
-- `"zen"` - Zen Browser
-- `"zen-beta"` - Zen Browser (Beta)
-
-### Per-App Browser Override
-
-You can override the browser for specific apps:
-
-```nix
-apps.slack = {
-  url = "https://slack.com";
-  browser = "firefox";  # Use Firefox instead of browser
-};
-```
-
-## Examples
-
-See the [Usage](#usage) section above for comprehensive examples.
-
-## Development
-
-### Formatting
-
-This project uses treefmt-nix for code formatting:
-
-```bash
-nix fmt
-```
-
-### Browser Engine Categorization
-
-The webapp launcher categorizes browsers by their rendering engine:
-
-**Chromium-based browsers** (`--app` mode):
-
-- Brave
-- Chromium
-- Vivaldi
-- Microsoft Edge
-
-**Firefox-based browsers** (standard window mode):
-
-- Firefox
-- Zen Browser
-
-Each category uses engine-appropriate flags for optimal webapp integration.
-
-## License
-
-MIT
