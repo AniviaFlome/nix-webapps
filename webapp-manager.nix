@@ -80,6 +80,31 @@ let
         description = "List of MIME types this application handles";
         example = [ "x-scheme-handler/slack" ];
       };
+
+      extraArgs = mkOption {
+        type = types.nullOr (types.listOf types.str);
+        default = null;
+        description = ''
+          Extra command-line arguments to pass to the browser.
+          Appended after --class and before --app.
+          Useful for browser-specific flags like Ozone/Wayland, dark mode, feature flags, etc.
+          If null, falls back to the global programs.nix-webapps.extraArgs setting.
+        '';
+        example = [
+          "--enable-features=UseOzonePlatform,WebUIDarkMode"
+          "--ozone-platform-hint=auto"
+        ];
+      };
+
+      isolate = mkOption {
+        type = types.nullOr types.bool;
+        default = null;
+        description = ''
+          If true, launches the webapp with a dedicated user-data-dir to isolate
+          cookies, sessions, and storage from other webapps and the main browser profile.
+          If null, falls back to the global programs.nix-webapps.isolate setting.
+        '';
+      };
     };
   };
 
@@ -121,13 +146,20 @@ let
       domain = builtins.replaceStrings [ "https://" "http://" ] [ "" "" ] app.url;
       domainParts = builtins.split "/" domain;
       baseDomain = builtins.head domainParts;
-      appClass = "WebApp-${builtins.replaceStrings [ "." ] [ "-" ] baseDomain}";
+      appClass = toLower "webapp.${browser}.${
+        builtins.replaceStrings [ "." " " ] [ "-" "-" ] baseDomain
+      }";
+
+      resolvedExtraArgs = if app.extraArgs != null then app.extraArgs else cfg.extraArgs;
+      extraArgsStr = optionalString (resolvedExtraArgs != [ ]) " ${concatStringsSep " " resolvedExtraArgs}";
+      shouldIsolate = if app.isolate != null then app.isolate else cfg.isolate;
+      isolateStr = optionalString shouldIsolate " --user-data-dir=${config.xdg.configHome}/${appClass}";
 
       execCommand =
         if app.exec != null then
           app.exec
         else
-          ''${browser} --new-window --class="${appClass}" --app="${app.url}"'';
+          ''${browser} --new-window --class="${appClass}"${extraArgsStr}${isolateStr} --app="${app.url}"'';
       mimeTypeStr = optionalString (
         app.mimeTypes != [ ]
       ) "MimeType=${concatStringsSep ";" app.mimeTypes};\n";
@@ -135,12 +167,13 @@ let
     in
     pkgs.writeText "${name}.desktop" ''
       [Desktop Entry]
-      Version=1.0
+      Version=1.5
       Name=${name}
       Comment=${if app.comment != "" then app.comment else name}
       Exec=${execCommand}
       Terminal=false
       Type=Application
+      StartupWMClass=${appClass}
       ${iconStr}StartupNotify=true
       ${mimeTypeStr}'';
 
@@ -172,6 +205,28 @@ in
       type = types.str;
       description = "Default browser to use for all web applications.";
       example = "brave";
+    };
+
+    isolate = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        If true, all webapps will launch with a dedicated user-data-dir to isolate
+        cookies, sessions, and storage. Can be overridden per-app.
+      '';
+    };
+
+    extraArgs = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        Extra command-line arguments passed to the browser for all webapps.
+        Per-app extraArgs override this entirely when set.
+      '';
+      example = [
+        "--enable-features=UseOzonePlatform"
+        "--ozone-platform-hint=auto"
+      ];
     };
   };
 
