@@ -151,7 +151,9 @@ let
       }";
 
       resolvedExtraArgs = if app.extraArgs != null then app.extraArgs else cfg.extraArgs;
-      extraArgsStr = optionalString (resolvedExtraArgs != [ ]) " ${concatStringsSep " " resolvedExtraArgs}";
+      extraArgsStr = optionalString (
+        resolvedExtraArgs != [ ]
+      ) " ${concatStringsSep " " resolvedExtraArgs}";
       shouldIsolate = if app.isolate != null then app.isolate else cfg.isolate;
       isolateStr = optionalString shouldIsolate " --user-data-dir=${config.xdg.configHome}/${appClass}";
 
