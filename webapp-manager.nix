@@ -25,20 +25,9 @@ let
         description = ''
           Icon URL or local file path.
           Defaults to <baseUrl>/favicon.ico if not specified.
-          For URL icons, nix will attempt to fetch with the provided sha (or fakeSha256 if not provided).
+          Remote icons are fetched at activation time and cached in $XDG_CACHE_HOME/nix-webapps/icons/.
         '';
         example = "https://github.com/favicon.ico";
-      };
-
-      sha = mkOption {
-        type = types.str;
-        default = lib.fakeSha256;
-        description = ''
-          SHA256 hash of the icon file (required for URL icons).
-          Defaults to fakeSha256 which will fail on first build and show the correct hash.
-          Get the hash with: nix-prefetch-url <url>
-        '';
-        example = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
       };
 
       browser = mkOption {
@@ -118,22 +107,17 @@ let
     # If regex matches, return the captured group; otherwise return original URL
     if matches != null then builtins.head matches else url;
 
+  iconCacheDir = "${config.xdg.cacheHome}/nix-webapps/icons";
+
   # Get icon path for desktop file
-  # If icon is a URL, fetch it at build time; otherwise use local path
+  # Remote icons are fetched at activation time and cached locally; local paths are used as-is
   getIconPath =
     name: app:
     let
       iconSource = if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
       isRemote = hasPrefix "http://" iconSource || hasPrefix "https://" iconSource;
     in
-    if isRemote then
-      pkgs.fetchurl {
-        url = iconSource;
-        sha256 = app.sha; # Defaults to lib.fakeSha256
-        name = "${name}-icon";
-      }
-    else
-      iconSource; # Local file path
+    if isRemote then "${iconCacheDir}/${name}-icon" else iconSource;
 
   # Generate .desktop file content
   makeDesktopFile =
@@ -240,5 +224,52 @@ in
         source = makeDesktopFile name app;
       }
     ) cfg.apps;
+
+    # Fetch remote icons at activation time; sync cache to match current config
+    home.activation.fetchWebappIcons = lib.hm.dag.entryAfter [ "writeBoundary" ] (
+      let
+        remoteApps = filterAttrs (
+          _name: app:
+          let
+            iconSource = if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
+          in
+          hasPrefix "http://" iconSource || hasPrefix "https://" iconSource
+        ) cfg.apps;
+
+        expectedList = concatStringsSep " " (mapAttrsToList (name: _: ''"${name}-icon"'') remoteApps);
+
+        fetchCmds = concatStringsSep "\n" (
+          mapAttrsToList (
+            name: app:
+            let
+              iconSource = if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
+            in
+            ''
+              if [ ! -f "${iconCacheDir}/${name}-icon.url" ] || [ "$(cat "${iconCacheDir}/${name}-icon.url")" != "${iconSource}" ]; then
+                ${pkgs.curl}/bin/curl -sL --max-time 10 -o "${iconCacheDir}/${name}-icon" "${iconSource}" || true
+                printf '%s' "${iconSource}" > "${iconCacheDir}/${name}-icon.url"
+              fi
+            ''
+          ) remoteApps
+        );
+      in
+      ''
+        mkdir -p "${iconCacheDir}"
+
+        # Remove orphaned icons not in current config
+        EXPECTED_ICONS=(${expectedList})
+        for f in "${iconCacheDir}"/*-icon; do
+          [ -e "$f" ] || continue
+          basename="$(basename "$f")"
+          found=0
+          for expected in "''${EXPECTED_ICONS[@]}"; do
+            [ "$basename" = "$expected" ] && found=1 && break
+          done
+          [ "$found" = 0 ] && rm -f "$f" "$f.url"
+        done
+
+        ${fetchCmds}
+      ''
+    );
   };
 }
