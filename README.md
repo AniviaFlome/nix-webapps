@@ -42,7 +42,6 @@ A nix flake that declares web applications.
       github = {
         url = "https://github.com";
         icon = "https://github.githubassets.com/favicons/favicon.png";
-        sha = "sha256-...";
         browser = "chromium-browser";
         comment = "GitHub";
         isolate = false;  # Opt out of isolation for this app
@@ -69,7 +68,6 @@ A nix flake that declares web applications.
 |---|---|---|---|
 | `url` | string | — | **(Required)** URL of the web application |
 | `icon` | string or null | `null` | Icon URL or local path. Auto-fetches `<url>/favicon.ico` if unset |
-| `sha` | string | `fakeSha256` | SHA256 hash for remote icon verification |
 | `browser` | string or null | `null` | Per-app browser override |
 | `exec` | string or null | `null` | Fully custom exec command (overrides browser) |
 | `comment` | string | `""` | Description shown in app launcher |
