@@ -8,24 +8,36 @@
 let
   cfg = config.programs.nix-webapps;
 
-  # Type definition for a web app
   webappType = lib.types.submodule {
     options = {
       url = lib.mkOption {
-        type = lib.types.str;
-        description = "URL of the web application";
+        type = lib.types.strMatching "https?://.+";
+        description = "URL of the web application (must start with http:// or https://)";
         example = "https://mail.google.com";
       };
 
       icon = lib.mkOption {
+        type = lib.types.nullOr (lib.types.either lib.types.str lib.types.path);
+        default = null;
+        description = ''
+          Icon for the application. Accepts:
+          - A remote URL (requires iconHash)
+          - A local file path
+          - null to auto-fetch from <baseUrl>/favicon.ico (requires iconHash)
+          If both icon and iconHash are null, no icon is set.
+        '';
+        example = "https://github.com/favicon.ico";
+      };
+
+      iconHash = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
         description = ''
-          Icon URL or local file path.
-          Defaults to <baseUrl>/favicon.ico if not specified.
-          Remote icons are fetched at activation time and cached in $XDG_CACHE_HOME/nix-webapps/icons/.
+          SHA256 hash of the icon file. Required when icon is a remote URL or null (auto-fetch).
+          Ignored for local file paths. Use `nix-prefetch-url --type sha256 <url> | nix hash to-sri --type sha256`
+          to obtain the SRI-format hash.
         '';
-        example = "https://github.com/favicon.ico";
+        example = "sha256-LuQyN9GWEAIQ8Xhue3O1fNFA9gE8Byxw29/9npvGlfg=";
       };
 
       browser = lib.mkOption {
@@ -95,67 +107,89 @@ let
     };
   };
 
-  # Extract base URL (protocol + domain) from a full URL
-  # Example: "https://mail.google.com/path" -> "https://mail.google.com"
-  getBaseUrl =
+  parseUrl =
     url:
     let
-      matches = builtins.match "(https?://[^/]+).*" url;
+      protocol =
+        let
+          m = builtins.match "(https?)://.*" url;
+        in
+        if m != null then builtins.head m else null;
+      base = builtins.head (builtins.match "(https?://[^/]+).*" url);
+      domainParts = builtins.split "/" (builtins.replaceStrings [ "https://" "http://" ] [ "" "" ] url);
+      host = builtins.head domainParts;
     in
-    if matches != null then builtins.head matches else url;
+    {
+      inherit protocol base host;
+    };
 
-  # Determine icon source: explicit icon URL/path or auto-derived favicon URL
-  getIconSource = app: if app.icon != null then app.icon else "${getBaseUrl app.url}/favicon.ico";
-
-  # Check if a URL is a remote HTTP/HTTPS URL
-  isRemoteUrl = url: lib.hasPrefix "http://" url || lib.hasPrefix "https://" url;
-
-  iconCacheDir = "${config.xdg.cacheHome}/nix-webapps/icons";
-
-  # Get icon path for desktop file
-  # Remote icons are fetched at activation time and cached locally; local paths are used as-is
-  getIconPath =
-    name: app:
+  isRemoteUrl =
+    icon:
     let
-      iconSource = getIconSource app;
+      str = toString icon;
     in
-    if isRemoteUrl iconSource then "${iconCacheDir}/${name}-icon" else iconSource;
+    lib.hasPrefix "http://" str || lib.hasPrefix "https://" str;
 
-  # Generate .desktop file content
-  makeDesktopFile =
+  resolveIcon =
     name: app:
+    if app.icon != null && isRemoteUrl app.icon then
+      pkgs.fetchurl {
+        url = toString app.icon;
+        sha256 = app.iconHash;
+        name = "${name}-icon";
+      }
+    else if app.icon != null then
+      toString app.icon
+    else if app.iconHash != null then
+      pkgs.fetchurl {
+        url = "${(parseUrl app.url).base}/favicon.ico";
+        sha256 = app.iconHash;
+        name = "${name}-favicon.ico";
+      }
+    else
+      null;
+
+  withDefault = appAttr: globalAttr: if appAttr != null then appAttr else globalAttr;
+
+  makeAppClass =
+    browser: url:
     let
-      iconPath = getIconPath name app;
-      browser = if app.browser != null then app.browser else cfg.browser;
+      inherit (parseUrl url) host;
+    in
+    lib.toLower "webapp.${browser}.${builtins.replaceStrings [ "." " " ] [ "-" "-" ] host}";
 
-      # Extract domain for window class
-      domain = builtins.replaceStrings [ "https://" "http://" ] [ "" "" ] app.url;
-      domainParts = builtins.split "/" domain;
-      baseDomain = builtins.head domainParts;
-      appClass = lib.toLower "webapp.${browser}.${
-        builtins.replaceStrings [ "." " " ] [ "-" "-" ] baseDomain
-      }";
-
-      resolvedExtraArgs = if app.extraArgs != null then app.extraArgs else cfg.extraArgs;
+  makeExec =
+    _name: app:
+    let
+      browser = withDefault app.browser cfg.browser;
+      resolvedExtraArgs = withDefault app.extraArgs cfg.extraArgs;
       extraArgsStr = lib.optionalString (
         resolvedExtraArgs != [ ]
       ) " ${lib.concatStringsSep " " resolvedExtraArgs}";
-      shouldIsolate = if app.isolate != null then app.isolate else cfg.isolate;
+      shouldIsolate = withDefault app.isolate cfg.isolate;
+      appClass = makeAppClass browser app.url;
       isolateStr = lib.optionalString shouldIsolate " --user-data-dir=${config.xdg.configHome}/${appClass}";
+    in
+    if app.exec != null then
+      app.exec
+    else
+      ''${browser} --new-window --class="${appClass}"${extraArgsStr}${isolateStr} --app="${app.url}"'';
 
-      execCommand =
-        if app.exec != null then
-          app.exec
-        else
-          ''${browser} --new-window --class="${appClass}"${extraArgsStr}${isolateStr} --app="${app.url}"'';
+  makeDesktopFile =
+    name: app:
+    let
+      iconPath = resolveIcon name app;
+      execCommand = makeExec name app;
+      browser = withDefault app.browser cfg.browser;
+      appClass = makeAppClass browser app.url;
       mimeTypeStr = lib.optionalString (
         app.mimeTypes != [ ]
       ) "MimeType=${lib.concatStringsSep ";" app.mimeTypes};\n";
-      iconStr = "Icon=${iconPath}\n";
+      iconStr = lib.optionalString (iconPath != null) "Icon=${iconPath}\n";
     in
     pkgs.writeText "${name}.desktop" ''
       [Desktop Entry]
-      Version=1.5
+      Version=1.0
       Name=${name}
       Comment=${if app.comment != "" then app.comment else name}
       Exec=${execCommand}
@@ -179,19 +213,24 @@ in
           gmail = {
             url = "https://mail.google.com";
             comment = "Gmail Web App";
-            # icon will be auto-fetched from https://mail.google.com/favicon.ico
+            iconHash = "sha256-...";
           };
           github = {
             url = "https://github.com";
-            # icon auto-fetched
+            iconHash = "sha256-...";
+          };
+          custom-app = {
+            url = "https://example.com";
+            icon = ./icons/custom.png;
           };
         }
       '';
     };
 
     browser = lib.mkOption {
-      type = lib.types.str;
-      description = "Default browser to use for all web applications.";
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Default browser to use for all web applications. Required if any app omits `exec` and `browser`.";
       example = "brave";
     };
 
@@ -219,60 +258,28 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Generate .desktop files for each web app
+    assertions =
+      let
+        needsBrowser = lib.filterAttrs (_name: app: app.exec == null) cfg.apps;
+      in
+      lib.mapAttrsToList (name: app: {
+        assertion = !(app.icon != null && isRemoteUrl app.icon) || app.iconHash != null;
+        message = "nix-webapps: '${name}' requires iconHash when icon is a remote URL";
+      }) cfg.apps
+      ++ lib.mapAttrsToList (name: app: {
+        assertion = (parseUrl app.url).protocol != null;
+        message = "nix-webapps: '${name}' url must start with http:// or https://";
+      }) cfg.apps
+      ++ lib.mapAttrsToList (name: _app: {
+        assertion = cfg.browser != null;
+        message = "nix-webapps: global `browser` is required when any app omits `exec` ('${name}' does)";
+      }) needsBrowser;
+
     xdg.dataFile = lib.mapAttrs' (
       name: app:
       lib.nameValuePair "applications/${name}.desktop" {
         source = makeDesktopFile name app;
       }
     ) cfg.apps;
-
-    # Fetch remote icons at activation time; sync cache to match current config
-    home.activation.fetchWebappIcons = lib.hm.dag.entryAfter [ "writeBoundary" ] (
-      let
-        remoteApps = lib.filterAttrs (
-          _name: app:
-          isRemoteUrl (getIconSource app)
-        ) cfg.apps;
-
-        expectedList = lib.concatStringsSep " " (lib.mapAttrsToList (name: _: ''"${name}-icon"'') remoteApps);
-
-        fetchCmds = lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (
-            name: app:
-            let
-              iconSource = getIconSource app;
-            in
-            ''
-              if [ ! -f "${iconCacheDir}/${name}-icon" ] || [ ! -f "${iconCacheDir}/${name}-icon.url" ] || [ "$(cat "${iconCacheDir}/${name}-icon.url")" != "${iconSource}" ]; then
-                if ${pkgs.curl}/bin/curl -fsL --max-time 10 -o "${iconCacheDir}/${name}-icon" "${iconSource}"; then
-                  printf '%s' "${iconSource}" > "${iconCacheDir}/${name}-icon.url"
-                else
-                  echo >&2 "WARNING: Failed to fetch icon for '${name}' from ${iconSource}"
-                  rm -f "${iconCacheDir}/${name}-icon"
-                fi
-              fi
-            ''
-          ) remoteApps
-        );
-      in
-      ''
-        mkdir -p "${iconCacheDir}"
-
-        # Remove orphaned icons not in current config
-        EXPECTED_ICONS=(${expectedList})
-        for f in "${iconCacheDir}"/*-icon; do
-          [ -e "$f" ] || continue
-          basename="$(basename "$f")"
-          found=0
-          for expected in "''${EXPECTED_ICONS[@]}"; do
-            [ "$basename" = "$expected" ] && found=1 && break
-          done
-          [ "$found" = 0 ] && rm -f "$f" "$f.url"
-        done
-
-        ${fetchCmds}
-      ''
-    );
   };
 }
